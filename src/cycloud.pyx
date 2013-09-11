@@ -1,37 +1,64 @@
 #cython: boundscheck=False, wraparound=False
 
-from libcpp.string cimport string
-from libcpp.vector cimport vector
+import cython
+from cython.parallel import parallel, prange
 
 cimport numpy as np
 
 import numpy as np
 from struct import pack, unpack, calcsize
 
-def registerDepthMap(np.ndarray[np.float_t, ndim=2] unregisteredDepthMap,
-                     np.ndarray[np.uint8_t, ndim=3] rgbImage,
-                     np.ndarray[np.float_t, ndim=2] depthK,
-                     np.ndarray[np.float_t, ndim=2] rgbK,
-                     np.ndarray[np.float_t, ndim=2] H_RGBFromDepth):
+@cython.cdivision(True)
+cpdef registerDepthMap(np.float_t[:,:] unregisteredDepthMap,
+                     np.uint8_t[:,:,:] rgbImage,
+                     np.float_t[:,:] depthK=None,
+                     np.float_t[:,:] rgbK=None,
+                     np.float_t[:,:] H_RGBFromDepth=None):
 
-    cdef int unregistered_height = unregisteredDepthMap.shape[0]
-    cdef int unregistered_width = unregisteredDepthMap.shape[1]
+    # Use the default value that Primesense uses for most sensors if no
+    # calibration matrix is provided.
+    if depthK is None:
+        depthK_tmp = np.array([[570.34, 0, 320.0],
+                            [0, 570.34, 240.0],
+                            [0, 0, 1]])
+        if unregisteredDepthMap.shape[1] != 640:
+            scale = unregisteredDepthMap.shape[1] / 640.0
+            depthK = depthK_tmp * scale
+    if rgbK is None:
+        rgbK_tmp = np.array([[540, 0, 320.0],
+                         [0, 540, 240.0],
+                         [0, 0, 1]])
+        if rgbImage.shape[1] != 640:
+            scale = rgbImage.shape[1] / 640.0
+            rgbK = rgbK_tmp * scale
+    # This default transform assumes that units are centimeters.
+    if H_RGBFromDepth is None:
+        H_RGBFromDepth = np.array([[1, 0, 0, 2.5],
+                                   [0, 1, 0, 0],
+                                   [0, 0, 1, 0],
+                                   [0, 0, 0, 1]])
 
-    cdef int registered_height = rgbImage.shape[0]
-    cdef int registered_width = rgbImage.shape[1]
+    cdef int unregisteredHeight = unregisteredDepthMap.shape[0]
+    cdef int unregisteredWidth = unregisteredDepthMap.shape[1]
 
-    cdef np.ndarray[np.float_t, ndim=2] registeredDepthMap
-    registeredDepthMap = np.zeros((registered_height, registered_width))
+    cdef int registeredHeight = rgbImage.shape[0]
+    cdef int registeredWidth = rgbImage.shape[1]
+
+    cdef np.ndarray[np.float_t, ndim=2] registeredDepthMap 
+    registeredDepthMap = np.zeros((registeredHeight, registeredWidth))
+    cdef np.float_t[:,:] registeredDepthMap_view = registeredDepthMap
 
     cdef int u, v
 
     cdef np.float_t depth
 
-    cdef np.ndarray[np.float_t, ndim=2] xyz_depth = np.empty((4,1))
-    cdef np.ndarray[np.float_t, ndim=2] xyz_rgb = np.empty((4,1))
+    cdef np.ndarray[np.float_t, ndim=2] xyzDepth = np.empty((4,1))
+    cdef np.ndarray[np.float_t, ndim=2] xyzRGB = np.empty((4,1))
+    cdef np.float_t[:] xyzDepth_view = xyzDepth[:,0]
+    cdef np.float_t[:] xyzRGB_view = xyzRGB[:,0]
 
     # Ensure that the last value is 1 (homogeneous coordinates)
-    xyz_depth [3] = 1
+    xyzDepth_view[3] = 1
 
     cdef np.float_t invDepthFx = 1.0 / depthK[0,0]
     cdef np.float_t invDepthFy = 1.0 / depthK[1,1]
@@ -48,29 +75,40 @@ def registerDepthMap(np.ndarray[np.float_t, ndim=2] unregisteredDepthMap,
 
     cdef np.float_t registeredDepth
 
-    for v in range(unregistered_height):
-        for u in range(unregistered_width):
+    for v in range(unregisteredHeight):
+      for u in range(unregisteredWidth):
 
             depth = unregisteredDepthMap[v,u]
             if depth == 0:
                 continue
 
-            xyz_depth[0] = ((u - depthCx) * depth) * invDepthFx
-            xyz_depth[1] = ((v - depthCy) * depth) * invDepthFy
-            xyz_depth[2] = depth
+            xyzDepth_view[0] = ((u - depthCx) * depth) * invDepthFx
+            xyzDepth_view[1] = ((v - depthCy) * depth) * invDepthFy
+            xyzDepth_view[2] = depth
 
-            np.dot(H_RGBFromDepth, xyz_depth, xyz_rgb)
+            xyzRGB_view[0] = (H_RGBFromDepth[0,0] * xyzDepth_view[0] +
+                              H_RGBFromDepth[0,1] * xyzDepth_view[1] +
+                              H_RGBFromDepth[0,2] * xyzDepth_view[2] +
+                              H_RGBFromDepth[0,3])
+            xyzRGB_view[1] = (H_RGBFromDepth[1,0] * xyzDepth_view[0] +
+                              H_RGBFromDepth[1,1] * xyzDepth_view[1] +
+                              H_RGBFromDepth[1,2] * xyzDepth_view[2] +
+                              H_RGBFromDepth[1,3])
+            xyzRGB_view[2] = (H_RGBFromDepth[2,0] * xyzDepth_view[0] +
+                              H_RGBFromDepth[2,1] * xyzDepth_view[1] +
+                              H_RGBFromDepth[2,2] * xyzDepth_view[2] +
+                              H_RGBFromDepth[2,3])
 
-            invRGB_Z  = 1.0 / xyz_rgb[2]
-            uRGB = (rgbFx * xyz_rgb[0]) * invRGB_Z + rgbCx + 0.5
-            vRGB = (rgbFy * xyz_rgb[1]) * invRGB_Z + rgbCy + 0.5
+            invRGB_Z  = 1.0 / xyzRGB_view[2]
+            uRGB = int((rgbFx * xyzRGB_view[0]) * invRGB_Z + rgbCx + 0.5)
+            vRGB = int((rgbFy * xyzRGB_view[1]) * invRGB_Z + rgbCy + 0.5)
 
-            if (uRGB < 0 or uRGB >= registered_width) or (vRGB < 0 or vRGB >= registered_height):
+            if (uRGB < 0 or uRGB >= registeredWidth) or (vRGB < 0 or vRGB >= registeredHeight):
                 continue
 
-            registeredDepth = xyz_rgb[2]
-            if registeredDepth > registeredDepthMap[vRGB,uRGB]:
-                registeredDepthMap[vRGB,uRGB] = registeredDepth
+            registeredDepth = xyzRGB_view[2]
+            if registeredDepth > registeredDepthMap_view[vRGB,uRGB]:
+                registeredDepthMap_view[vRGB,uRGB] = registeredDepth
 
     return registeredDepthMap
 
