@@ -20,7 +20,7 @@ def registerPointCloud(np.ndarray[np.float_t, ndim=2] unregisteredDepthMap,
     cdef int registered_height = rgbImage.shape[0]
     cdef int registered_width = rgbImage.shape[1]
 
-    cdef np.ndarray[np.uint16_t, ndim=2] registeredDepthMap
+    cdef np.ndarray[np.float_t, ndim=2] registeredDepthMap
     registeredDepthMap = np.zeros((registered_height, registered_width))
 
     cdef int u, v
@@ -35,8 +35,8 @@ def registerPointCloud(np.ndarray[np.float_t, ndim=2] unregisteredDepthMap,
 
     cdef np.float_t invDepthFx = 1.0 / depthK[0,0]
     cdef np.float_t invDepthFy = 1.0 / depthK[1,1]
-    cdef np.float_t depthCx = depthK[0,2] - depth_x_offset
-    cdef np.float_t depthCy = depthK[1,2] - depth_y_offset
+    cdef np.float_t depthCx = depthK[0,2]
+    cdef np.float_t depthCy = depthK[1,2]
 
     cdef np.float_t rgbFx = rgbK[0,0]
     cdef np.float_t rgbFy = rgbK[1,1]
@@ -69,11 +69,11 @@ def registerPointCloud(np.ndarray[np.float_t, ndim=2] unregisteredDepthMap,
                 continue
 
             registeredDepth = xyz_rgb[2]
-            if registeredDepth > registered[vRGB,uRGB]:
-                registered[vRGB,uRGB] = registeredDepth
+            if registeredDepth > registeredDepthMap[vRGB,uRGB]:
+                registeredDepthMap[vRGB,uRGB] = registeredDepth
 
 def unregisteredDepthMapToPointCloud(np.ndarray[np.float_t, ndim=2] depthMap,
-                                          np.ndarray[np.float_t, ndim=2] depthK=None):
+                                     np.ndarray[np.float_t, ndim=2] depthK=None):
 
     # Use the default value that Primesense uses for most sensors if no
     # calibration matrix is provided.
@@ -118,13 +118,13 @@ def registeredDepthMapToPointCloud(np.ndarray[np.float_t, ndim=2] depthMap,
 
     # Use the default value that Primesense uses for most sensors if no
     # calibration matrix is provided.
-    if depthK is None:
-        depthK = np.array([[540, 0, 320.0],
-                            [0, 540, 240.0],
-                            [0, 0, 1]])
+    if rgbK is None:
+        rgbK = np.array([[540, 0, 320.0],
+                         [0, 540, 240.0],
+                         [0, 0, 1]])
         if depthMap.shape[1] != 640:
             scale = depthMap.shape[1] / 640.0
-            depthK = depthK * scale
+            rgbK = rgbK * scale
 
     cdef np.float_t rgbCx = rgbK[0,2]
     cdef np.float_t rgbCy = rgbK[1,2]
@@ -134,6 +134,8 @@ def registeredDepthMapToPointCloud(np.ndarray[np.float_t, ndim=2] depthMap,
     cdef int height = depthMap.shape[0]
     cdef int width = depthMap.shape[1]
     cdef int u, v
+
+    cdef np.ndarray[np.float_t,ndim=3] cloud = np.empty((height, width, 6), dtype=np.float)
 
     for v in range(height):
         for u in range(width):
