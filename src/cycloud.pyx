@@ -8,11 +8,11 @@ cimport numpy as np
 import numpy as np
 from struct import pack, unpack, calcsize
 
-def registerPointCloud(np.ndarray[np.float_t, ndim=2] unregisteredDepthMap,
-                       np.ndarray[np.uint8_t, ndim=3] rgbImage,
-                       np.ndarray[np.float_t, ndim=2] depthK,
-                       np.ndarray[np.float_t, ndim=2] rgbK,
-                       np.ndarray[np.float_t, ndim=2] H_RGBFromDepth):
+def registerDepthMap(np.ndarray[np.float_t, ndim=2] unregisteredDepthMap,
+                     np.ndarray[np.uint8_t, ndim=3] rgbImage,
+                     np.ndarray[np.float_t, ndim=2] depthK,
+                     np.ndarray[np.float_t, ndim=2] rgbK,
+                     np.ndarray[np.float_t, ndim=2] H_RGBFromDepth):
 
     cdef int unregistered_height = unregisteredDepthMap.shape[0]
     cdef int unregistered_width = unregisteredDepthMap.shape[1]
@@ -72,6 +72,8 @@ def registerPointCloud(np.ndarray[np.float_t, ndim=2] unregisteredDepthMap,
             if registeredDepth > registeredDepthMap[vRGB,uRGB]:
                 registeredDepthMap[vRGB,uRGB] = registeredDepth
 
+    return registeredDepthMap
+
 def unregisteredDepthMapToPointCloud(np.ndarray[np.float_t, ndim=2] depthMap,
                                      np.ndarray[np.float_t, ndim=2] depthK=None):
 
@@ -111,6 +113,8 @@ def unregisteredDepthMapToPointCloud(np.ndarray[np.float_t, ndim=2] depthMap,
                 cloud[v,u,0] = (u - depthCx) * depth * depthInvFx
                 cloud[v,u,1] = (v - depthCy) * depth * depthInvFy
                 cloud[v,u,2] = depth
+
+    return cloud
 
 def registeredDepthMapToPointCloud(np.ndarray[np.float_t, ndim=2] depthMap,
                                    np.ndarray[np.uint8_t, ndim=3] rgbImage,
@@ -154,6 +158,8 @@ def registeredDepthMapToPointCloud(np.ndarray[np.float_t, ndim=2] depthMap,
                 cloud[v,u,3] = rgbImage[v,u,0]
                 cloud[v,u,4] = rgbImage[v,u,1]
                 cloud[v,u,5] = rgbImage[v,u,2]
+
+    return cloud
 
 def depthMapToImage(image):
     return np.uint8(image / (np.max(image)*1.0/255))
