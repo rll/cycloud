@@ -143,7 +143,7 @@ cpdef unregisteredDepthMapToPointCloud(np.float_t[:,:] depthMap,
     if organized:
       cloud = np.empty((height, width, 3), dtype=np.float)
     else:
-      cloud = np.empty((height*width, 1, 3), dtype=np.float)
+      cloud = np.empty((1, height*width, 3), dtype=np.float)
 
     cdef int row, col
     cdef int goodPointsCount = 0
@@ -208,7 +208,7 @@ cpdef registeredDepthMapToPointCloud(np.float_t[:,:] depthMap,
     if organized:
       cloud = np.empty((height, width, 6), dtype=np.float)
     else:
-      cloud = np.empty((height*width, 1, 6), dtype=np.float)
+      cloud = np.empty((1, height*width, 6), dtype=np.float)
 
     cdef int goodPointsCount = 0
     cdef int row, col
@@ -247,6 +247,16 @@ cpdef registeredDepthMapToPointCloud(np.float_t[:,:] depthMap,
     if not organized: 
       cloud = cloud[:goodPointsCount,:,:]
     return cloud
+
+def transformCloud(cloud, H):
+    if cloud.shape[0] != 1:
+        raise Exception("transformCloud for organized clouds not yet implemented.")
+
+    H_cloud = np.empty((cloud.shape[0], 4))
+    H_cloud[:, :3] = cloud[0,:,:3]
+    H_cloud[:, 3] = 1
+    transformed_H_cloud = np.dot(H,H_cloud.T).T
+    cloud[0,:,:3] = transformed_H_cloud[:,:3]
 
 def depthMapToImage(image):
     return np.uint8(image / (np.max(image)*1.0/255))
@@ -371,6 +381,7 @@ def readPCD(filename):
                 pointCloud[row, col, 0] = data[0]
                 pointCloud[row, col, 1] = data[1]
                 pointCloud[row, col, 2] = data[2]
+
                 if rgb:
                     rgb_float = data[3]
                     packed = pack('f', rgb_float)
@@ -383,3 +394,4 @@ def readPCD(filename):
                     pointCloud[row, col, 5] = b
 
         return pointCloud
+
