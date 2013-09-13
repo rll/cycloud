@@ -176,7 +176,7 @@ cpdef unregisteredDepthMapToPointCloud(np.float_t[:,:] depthMap,
               goodPointsCount += 1
 
     if not organized: 
-      cloud = cloud[:goodPointsCount,:,:]
+      cloud = cloud[:,:goodPointsCount,:]
     return cloud
 
 cpdef registeredDepthMapToPointCloud(np.float_t[:,:] depthMap,
@@ -245,7 +245,7 @@ cpdef registeredDepthMapToPointCloud(np.float_t[:,:] depthMap,
               goodPointsCount += 1
 
     if not organized: 
-      cloud = cloud[:goodPointsCount,:,:]
+      cloud = cloud[:,:goodPointsCount,:]
     return cloud
 
 def transformCloud(cloud, H):
