@@ -157,8 +157,8 @@ cpdef unregisteredDepthMapToPointCloud(np.float_t[:,:] depthMap,
               row = v
               col = u
             else:
-              row = goodPointsCount
-              col = 0
+              row = 0
+              col = goodPointsCount
 
             if depth <= 0:
                 if organized:
@@ -221,8 +221,8 @@ cpdef registeredDepthMapToPointCloud(np.float_t[:,:] depthMap,
               row = v
               col = u
             else:
-              row = goodPointsCount
-              col = 0
+              row = 0
+              col = goodPointsCount
 
             if depth <= 0:
                 if organized:
