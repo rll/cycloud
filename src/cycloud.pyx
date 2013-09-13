@@ -252,7 +252,7 @@ def transformCloud(cloud, H):
     if cloud.shape[0] != 1:
         raise Exception("transformCloud for organized clouds not yet implemented.")
 
-    H_cloud = np.empty((cloud.shape[0], 4))
+    H_cloud = np.empty((cloud.shape[1], 4))
     H_cloud[:, :3] = cloud[0,:,:3]
     H_cloud[:, 3] = 1
     transformed_H_cloud = np.dot(H,H_cloud.T).T
