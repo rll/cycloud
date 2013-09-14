@@ -264,16 +264,16 @@ cpdef downsampleImage(np.ndarray[np.uint8_t, ndim=3] rgbImage,
     if height == 1024:
         shift = 30
    
-    cdef np.ndarray[np.float_t, ndim=2] rgbK_new
-    rgbK_new = rgbK
-    rgbK_new[1, 2] = rgbK[1, 2] - shift
-    rgbK_new = rgbK_new/scale
-    rgbK_new[2, 2] = 1
+    cdef np.ndarray[np.float_t, ndim=2] rgbKNew
+    rgbKNew = rgbK.copy()
+    rgbKNew[1, 2] = rgbK[1, 2] - shift
+    rgbKNew = rgbKNew/scale
+    rgbKNew[2, 2] = 1
 
     cdef np.ndarray[np.uint8_t, ndim=3] downsampImage
     downsampImage = scipy.misc.imresize(rgbImage[30:990, :, :], (480, 640)) 
 
-    return (downsampImage, rgbK_new)
+    return (downsampImage, rgbKNew)
     
 
 
