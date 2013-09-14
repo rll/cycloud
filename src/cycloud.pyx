@@ -6,6 +6,7 @@ from cython.parallel import parallel, prange
 cimport numpy as np
 
 import numpy as np
+import scipy.misc
 from struct import pack, unpack, calcsize
 
 @cython.cdivision(True)
@@ -247,6 +248,34 @@ cpdef registeredDepthMapToPointCloud(np.float_t[:,:] depthMap,
     if not organized: 
       cloud = cloud[:,:goodPointsCount,:]
     return cloud
+
+cpdef downsampleImage(np.ndarray[np.uint8_t, ndim=3] rgbImage,
+                      np.ndarray[np.float_t, ndim=2] rgbK):
+    supportedHeights = [480, 960, 1024]
+    supportedWidths = [640, 1280]
+    cdef int height = rgbImage.shape[0]
+    cdef int width = rgbImage.shape[1]
+    if height not in supportedHeights and width not in supportedWidths:
+        print "Non supported image size ({0}, {1})".format(height, width)
+        raise
+
+    scale = width/640.0
+    shift = 0
+    if height == 1024:
+        shift = 30
+   
+    cdef np.ndarray[np.float_t, ndim=2] rgbK_new
+    rgbK_new = rgbK
+    rgbK_new[1, 2] = rgbK[1, 2] - shift
+    rgbK_new = rgbK_new/scale
+    rgbK_new[2, 2] = 1
+
+    cdef np.ndarray[np.uint8_t, ndim=3] downsampImage
+    downsampImage = scipy.misc.imresize(rgbImage[30:990, :, :], (480, 640)) 
+
+    return (downsampImage, rgbK_new)
+    
+
 
 def transformCloud(cloud, H):
     if cloud.shape[0] != 1:
