@@ -281,7 +281,7 @@ def transformCloud(cloud, H):
     if cloud.shape[0] != 1:
         raise Exception("transformCloud for organized clouds not yet implemented.")
 
-    H_cloud = np.empty((cloud.shape[0], 4))
+    H_cloud = np.empty((cloud.shape[1], 4))
     H_cloud[:, :3] = cloud[0,:,:3]
     H_cloud[:, 3] = 1
     transformed_H_cloud = np.dot(H,H_cloud.T).T
@@ -329,12 +329,14 @@ def writePCD(pointCloud, filename, ascii=False):
         else:
           f.write("DATA binary\n")
           if pointCloud.shape[2] == 6:
+              # These are written as bgr because rgb is interpreted as a single
+              # little-endian float.
               dt = np.dtype([('x', np.float32),
                              ('y', np.float32),
                              ('z', np.float32),
-                             ('r', np.uint8),
-                             ('g', np.uint8),
                              ('b', np.uint8),
+                             ('g', np.uint8),
+                             ('r', np.uint8),
                              ('I', np.uint8)])
               pointCloud_tmp = np.zeros((6, height*width, 1), dtype=dt)
               for i, k in enumerate(['x', 'y', 'z', 'r', 'g', 'b']):
