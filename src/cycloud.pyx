@@ -300,12 +300,14 @@ def writePCD(pointCloud, filename, ascii=False):
         else:
           f.write("DATA binary\n")
           if pointCloud.shape[2] == 6:
+              # These are written as bgr because rgb is interpreted as a single
+              # little-endian float.
               dt = np.dtype([('x', np.float32),
                              ('y', np.float32),
                              ('z', np.float32),
-                             ('r', np.uint8),
-                             ('g', np.uint8),
                              ('b', np.uint8),
+                             ('g', np.uint8),
+                             ('r', np.uint8),
                              ('I', np.uint8)])
               pointCloud_tmp = np.zeros((6, height*width, 1), dtype=dt)
               for i, k in enumerate(['x', 'y', 'z', 'r', 'g', 'b']):
