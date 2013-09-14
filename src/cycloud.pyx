@@ -251,8 +251,8 @@ cpdef registeredDepthMapToPointCloud(np.float_t[:,:] depthMap,
 
 cpdef downsampleImage(np.ndarray[np.uint8_t, ndim=3] rgbImage,
                       np.ndarray[np.float_t, ndim=2] rgbK):
-    supportedHeights = [480, 960, 1024]
-    supportedWidths = [640, 1280]
+    supportedHeights = [960, 1024]
+    supportedWidths = [1280]
     cdef int height = rgbImage.shape[0]
     cdef int width = rgbImage.shape[1]
     if height not in supportedHeights and width not in supportedWidths:
@@ -271,7 +271,7 @@ cpdef downsampleImage(np.ndarray[np.uint8_t, ndim=3] rgbImage,
     rgbKNew[2, 2] = 1
 
     cdef np.ndarray[np.uint8_t, ndim=3] downsampImage
-    downsampImage = scipy.misc.imresize(rgbImage[30:990, :, :], (480, 640)) 
+    downsampImage = scipy.misc.imresize(rgbImage[shift:960+shift, :, :], (480, 640)) 
 
     return (downsampImage, rgbKNew)
     
