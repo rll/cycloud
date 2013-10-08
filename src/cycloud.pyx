@@ -292,6 +292,9 @@ def depthMapToImage(image):
 
 # TODO sanity check speed / read write
 def writePCD(pointCloud, filename, ascii=False):
+    if len(pointCloud.shape) != 3:
+      print "Expected pointCloud to have 3 dimensions. Got %d instead" % len(pointCloud.shape)
+      return
     with open(filename, 'w') as f:
         height = pointCloud.shape[0]
         width = pointCloud.shape[1]
@@ -315,7 +318,7 @@ def writePCD(pointCloud, filename, ascii=False):
           f.write("DATA ascii\n")
           for row in range(height):
             for col in range(width):
-                if pointCloud.shape[2]== 3:
+                if pointCloud.shape[2] == 3:
                     f.write("%f %f %f\n" % tuple(pointCloud[row, col, :]))
                 else:
                     f.write("%f %f %f" % tuple(pointCloud[row, col, :3]))
@@ -338,7 +341,7 @@ def writePCD(pointCloud, filename, ascii=False):
                              ('g', np.uint8),
                              ('r', np.uint8),
                              ('I', np.uint8)])
-              pointCloud_tmp = np.zeros((6, height*width, 1), dtype=dt)
+              pointCloud_tmp = np.zeros((height*width, 1), dtype=dt)
               for i, k in enumerate(['x', 'y', 'z', 'r', 'g', 'b']):
                   pointCloud_tmp[k] = pointCloud[:, :, i].reshape((height*width, 1))
               pointCloud_tmp.tofile(f)
@@ -347,7 +350,7 @@ def writePCD(pointCloud, filename, ascii=False):
                              ('y', np.float32),
                              ('z', np.float32),
                              ('I', np.uint8)])
-              pointCloud_tmp = np.zeros((3, height*width, 1), dtype=dt)
+              pointCloud_tmp = np.zeros((height*width, 1), dtype=dt)
               for i, k in enumerate(['x', 'y', 'z']):
                   pointCloud_tmp[k] = pointCloud[:, :, i].reshape((height*width, 1))
               pointCloud_tmp.tofile(f)
