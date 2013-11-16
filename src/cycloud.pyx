@@ -9,6 +9,22 @@ import numpy as np
 import scipy.misc
 from struct import pack, unpack, calcsize
 
+def fitPlane(points):
+    mean = points.mean(axis=0)
+    uu,dd,vv = np.linalg.svd(points-mean)
+    plane = np.zeros(4)
+    plane[:3] = vv[0]
+    plane[3] = -np.dot(vv[0], mean)
+    return plane
+
+def fitLine(points):
+    mean = points.mean(axis=0)
+    uu,dd,vv = np.linalg.svd(points-mean)
+    line = np.zeros(6)
+    line[:3] = mean
+    line[3:] = vv[0]
+    return line
+
 @cython.cdivision(True)
 cpdef registerDepthMap(np.float_t[:,:] unregisteredDepthMap,
                        np.uint8_t[:,:,:] rgbImage,
@@ -300,7 +316,7 @@ cpdef downsampleImage(np.ndarray[np.uint8_t, ndim=3] rgbImage,
     
 
 
-def transformCloud(cloud, H):
+def transformCloud(cloud, H, inplace=False):
     if cloud.shape[0] != 1:
         raise Exception("transformCloud for organized clouds not yet implemented.")
 
@@ -308,7 +324,33 @@ def transformCloud(cloud, H):
     H_cloud[:, :3] = cloud[0,:,:3]
     H_cloud[:, 3] = 1
     transformed_H_cloud = np.dot(H,H_cloud.T).T
-    cloud[0,:,:3] = transformed_H_cloud[:,:3]
+    if inplace:
+        cloud[0,:,:3] = transformed_H_cloud[:,:3]
+    else:
+        cloud = np.copy(cloud)
+        cloud[0,:,:3] = transformed_H_cloud[:,:3]
+    return cloud
+
+cpdef projectPoints(np.float_t[:,:] K, np.float_t[:,:] points):
+
+    cdef np.ndarray[np.float_t, ndim=2] points2d
+    points2d = np.empty((points.shape[0],2), dtype=np.float)
+
+    cdef float fx = K[0,0]
+    cdef float fy = K[1,1]
+    cdef float cx = K[0,2]
+    cdef float cy = K[1,2]
+
+    cdef int i
+
+    cdef float depth
+
+    for i in range(points2d.shape[0]):
+        depth = points2d[i,2]
+        points2d[i,0] = points[i,0] * fx / depth + cx
+        points2d[i,1] = points[i,1] * fy / depth + cy
+
+    return points2d
 
 def depthMapToImage(image):
     return np.uint8(image / (np.max(image)*1.0/255))
