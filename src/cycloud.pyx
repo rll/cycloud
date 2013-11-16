@@ -113,6 +113,29 @@ cpdef registerDepthMap(np.float_t[:,:] unregisteredDepthMap,
 
     return registeredDepthMap
 
+cpdef get3dPoints(np.float_t[:,:] K,
+                  np.float_t[:,:] points2d,
+                  np.float_t[:] depths):
+
+    cdef np.float_t cx = K[0,2]
+    cdef np.float_t cy = K[1,2]
+    cdef np.float_t invFx = 1.0/K[0,0]
+    cdef np.float_t invFy = 1.0/K[1,1]
+
+    cdef np.float_t depth
+
+    cdef np.ndarray[np.float_t,ndim=3] points
+    points = np.empty((points2d.shape[0], 3), dtype=np.float)
+
+    cdef int i
+
+    for i in range(points.shape[0]):
+        points[i,0] = (points2d[i,0] - cx) * depths[i] * invFx
+        points[i,1] = (points2d[i,1] - cy) * depths[i] * invFy
+        points[i,2] = depths[i]
+
+    return points
+
 cpdef unregisteredDepthMapToPointCloud(np.float_t[:,:] depthMap,
                                        np.float_t[:,:] depthK=None,
                                        organized=True):
