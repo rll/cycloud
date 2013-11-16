@@ -140,7 +140,7 @@ cpdef get3dPoints(np.float_t[:,:] K,
 
     cdef np.float_t depth
 
-    cdef np.ndarray[np.float_t,ndim=3] points
+    cdef np.ndarray[np.float_t,ndim=2] points
     points = np.empty((points2d.shape[0], 3), dtype=np.float)
 
     cdef int i
