@@ -313,8 +313,13 @@ cpdef downsampleImage(np.ndarray[np.uint8_t, ndim=3] rgbImage,
     downsampImage = scipy.misc.imresize(rgbImage[shift:960+shift, :, :], (480, 640)) 
 
     return (downsampImage, rgbKNew)
-    
 
+def transformPoints(points, H):
+    H_points = np.empty((points.shape[0], 4))
+    H_points[:, :3] = points
+    H_points[:, 3] = 1
+    transformed_H_points = np.dot(H,H_points.T).T
+    return transformed_H_points[:,:3]
 
 def transformCloud(cloud, H, inplace=False):
     if cloud.shape[0] != 1:
@@ -346,7 +351,7 @@ cpdef projectPoints(np.float_t[:,:] K, np.float_t[:,:] points):
     cdef float depth
 
     for i in range(points2d.shape[0]):
-        depth = points2d[i,2]
+        depth = points[i,2]
         points2d[i,0] = points[i,0] * fx / depth + cx
         points2d[i,1] = points[i,1] * fy / depth + cy
 
