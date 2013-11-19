@@ -56,6 +56,34 @@ def undistortPoints(u, K, d):
 
     return np.hstack([xpp[:,np.newaxis], ypp[:,np.newaxis]])
 
+def undistortPoints2(u, K, d):
+
+    fx = K[0,0]
+    fy = K[1,1]
+    cx = K[0,2]
+    cy = K[1,2]
+
+    k1 = d[0]
+    k2 = d[1]
+    p1 = d[2]
+    p2 = d[3]
+    k3 = d[4]
+
+    xp = (u[:,0] - cx)/fx
+    yp = (u[:,1] - cy)/fy
+
+    r_2 = xp*xp + yp*yp
+    r_4 = r_2*r_2
+    r_6 = r_4*r_2
+
+    xpp = (xp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
+           + 2.0*p1*xp*yp + p2*(r_2 + 2.0*xp*xp))
+
+    ypp = (yp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
+           + 2.0*p2*xp*yp + p1*(r_2 + 2.0*yp*yp))
+
+    return np.hstack([xpp[:,np.newaxis], ypp[:,np.newaxis]])
+
 def emanateRays(u, K):
     fx = K[0,0]
     fy = K[1,1]
@@ -107,6 +135,53 @@ def triangulateRays(rays1, rays2):
     mu = bl_inv * ray1RHS + br_inv * ray2RHS
 
     points = 0.5 * (rays1[:, :3] + rays2[:, :3] + lmb[:,np.newaxis]*ray1Dirs + mu[:,np.newaxis]*ray2Dirs)
+
+    return points
+
+def stereo2(C1_u, C2_u, H_C1_from_C2, C1_K, C2_K, C1_d, C2_d):
+
+    C1_u_undistorted = undistortPoints2(C1_u, C1_K, C1_d)
+    C2_u_undistorted = undistortPoints2(C2_u, C2_K, C2_d)
+
+    points = np.zeros((C1_u.shape[0],3))
+    for i in range(C1_u.shape[0]):
+        P1 = np.zeros((3,4))
+        P1[0,0] = 1
+        P1[1,1] = 1
+        P1[2,2] = 1
+        P2 = np.zeros((3,4))
+        H = H_C1_from_C2#np.linalg.inv(H_C1_from_C2)
+        P2[:,:] = H[:3,:]
+        #P1 = np.dot(C1_K, P1)
+        #P2 = np.dot(C2_K, P2)
+
+        A = np.zeros((4,3))
+        B = np.zeros((4,1))
+
+        x = C1_u_undistorted[i,0]
+        y = C1_u_undistorted[i,1]
+
+        A[0,0] = x * P1[2,0] - P1[0,0]
+        A[0,1] = x * P1[2,1] - P1[0,1]
+        A[0,2] = x * P1[2,2] - P1[0,2]
+        A[1,0] = y * P1[2,0] - P1[1,0]
+        A[1,1] = y * P1[2,1] - P1[1,1]
+        A[1,2] = y * P1[2,2] - P1[1,2]
+        A[2,0] = x * P2[2,0] - P2[0,0]
+        A[2,1] = x * P2[2,1] - P2[0,1]
+        A[2,2] = x * P2[2,2] - P2[0,2]
+        A[3,0] = y * P2[2,0] - P2[1,0]
+        A[3,1] = y * P2[2,1] - P2[1,1]
+        A[3,2] = y * P2[2,2] - P2[1,2]
+
+        B[0] = -x * P1[2,3] - P1[0,3]
+        B[1] = -y * P1[2,3] - P1[1,3]
+        B[2] = -x * P2[2,3] - P2[0,3]
+        B[3] = -y * P2[2,3] - P2[1,3]
+
+        X = np.linalg.lstsq(A,B)[0]
+
+        points[i] = X.T
 
     return points
 
