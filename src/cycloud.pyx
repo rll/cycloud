@@ -25,6 +25,105 @@ def fitLine(points):
     line[3:] = vv[0]
     return line
 
+def undistortPoints(u, K, d):
+
+    fx = K[0,0]
+    fy = K[1,1]
+    cx = K[0,2]
+    cy = K[1,2]
+
+    k1 = d[0]
+    k2 = d[1]
+    p1 = d[2]
+    p2 = d[3]
+    k3 = d[4]
+
+    xp = (u[:,0] - cx)/fx
+    yp = (u[:,1] - cy)/fy
+
+    r_2 = xp*xp + yp*yp
+    r_4 = r_2*r_2
+    r_6 = r_4*r_2
+
+    xpp = (xp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
+           + 2.0*p1*xp*yp + p2*(r_2 + 2.0*xp*xp))
+
+    ypp = (yp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
+           + 2.0*p2*xp*yp + p1*(r_2 + 2.0*yp*yp))
+
+    xpp = xpp * fx + cx
+    ypp = ypp * fy + cy
+
+    return np.hstack([xpp[:,np.newaxis], ypp[:,np.newaxis]])
+
+def emanateRays(u, K):
+    fx = K[0,0]
+    fy = K[1,1]
+    cx = K[0,2]
+    cy = K[1,2]
+
+    rays = np.zeros((u.shape[0], 6))
+
+    rays[:, 3] = (u[:, 0] - cx) / fx
+    rays[:, 4] = (u[:, 1] - cy) / fy
+    rays[:, 5] = 1
+
+    return rays
+
+def transformRays(rays, transform):
+
+    transformedRays = np.zeros_like(rays)
+    transformedRays[:, :3] = transformPoints(rays[:, :3], transform)
+    transformedRays[:, 3:] = transformPoints(rays[:, 3:], transform)
+
+    return transformedRays
+
+def triangulateRays(rays1, rays2):
+
+    ray1Dirs = rays1[:, 3:] - rays1[:, :3]
+    ray2Dirs = rays2[:, 3:] - rays2[:, :3]
+
+    dots = np.einsum('ij,ij->i', ray1Dirs, ray2Dirs)
+    mags1 = np.einsum('ij,ij->i', ray1Dirs, ray1Dirs)
+    mags2 = np.einsum('ij,ij->i', ray2Dirs, ray2Dirs)
+
+    tl = -mags1
+    tr = dots
+    bl = -dots
+    br = mags2
+
+    det = br * tl - tr * bl
+    tl_inv = br / det
+    tr_inv = -tr / det
+    bl_inv = -bl / det
+    br_inv = tl / det
+
+    ray1RHS = (np.einsum('ij,ij->i', rays1[:,:3], ray1Dirs)
+             - np.einsum('ij,ij->i', rays2[:,:3], ray1Dirs))
+    ray2RHS = (np.einsum('ij,ij->i', rays1[:,:3], ray2Dirs)
+             - np.einsum('ij,ij->i', rays2[:,:3], ray2Dirs))
+
+    lmb = tl_inv * ray1RHS + tr_inv * ray2RHS
+    mu = bl_inv * ray1RHS + br_inv * ray2RHS
+
+    points = 0.5 * (rays1[:, :3] + rays2[:, :3] + lmb[:,np.newaxis]*ray1Dirs + mu[:,np.newaxis]*ray2Dirs)
+
+    return points
+
+def stereo(C1_u, C2_u, H_C1_from_C2, C1_K, C2_K, C1_d, C2_d):
+
+    C1_u_undistorted = undistortPoints(C1_u, C1_K, C1_d)
+    C2_u_undistorted = undistortPoints(C2_u, C2_K, C2_d)
+
+    C1_rays = emanateRays(C1_u_undistorted, C1_K)
+    C2_rays = emanateRays(C2_u_undistorted, C2_K)
+
+    C2_rays_in_C1 = transformRays(C2_rays, H_C1_from_C2)
+
+    point = triangulateRays(C1_rays, C2_rays_in_C1)
+
+    return point
+
 @cython.cdivision(True)
 cpdef registerDepthMap(np.float_t[:,:] unregisteredDepthMap,
                        np.uint8_t[:,:,:] rgbImage,
