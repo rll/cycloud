@@ -510,6 +510,12 @@ def transformCloud(cloud, H, inplace=False):
         cloud[0,:,:3] = transformed_H_cloud[:,:3]
     return cloud
 
+def toUnorganized(cloud, remove_nan=False):
+    cloud = cloud.reshape((cloud.shape[0] * cloud.shape[1], cloud.shape[2]))
+    cloud = (cloud if not remove_nan else 
+             cloud[np.logical_not(np.any(np.isnan(cloud), axis=1))])
+    return cloud[None]
+
 cpdef projectPoints(np.float_t[:,:] K, np.float_t[:,:] points):
 
     cdef np.ndarray[np.float_t, ndim=2] points2d
