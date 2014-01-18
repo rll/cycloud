@@ -689,10 +689,14 @@ def readPLY(filename):
             return
 
         rgb = False
+        faces = False
         while line != 'end_header\n':
             line = file.readline()
             if 'element vertex' in line:
                 num_vertex = int(line.split()[2])
+            if 'element face' in line:
+                faces = True
+                num_faces = int(line.split()[2])
             if 'red' in line or 'green' in line or 'blue' in line:
                 rgb = True
 
@@ -700,7 +704,8 @@ def readPLY(filename):
             cloud = np.empty((1, num_vertex, 6), dtype=np.float)
         else:
             cloud = np.empty((1, num_vertex, 3), dtype=np.float)
-        
+        face_list = []
+
         for i in range(num_vertex):
             x_bin = file.read(4)
             y_bin = file.read(4)
@@ -717,9 +722,17 @@ def readPLY(filename):
                 cloud[0, i, 4] = g
                 cloud[0, i, 5] = b
 
-        return cloud
+        if faces:
+            for i in range(num_faces):
+                face = []
+                num_vertex = ord(file.read(1))
+                for j in range(num_vertex):
+                    face.append(unpack('<i', file.read(4))[0])
+                face_list.append(face)
 
-def writePLY(cloud, filename):
+        return cloud, face_list
+
+def writePLY(filename, cloud, faces=None):
     if len(cloud.shape) != 3:
         print "Expected pointCloud to have 3 dimensions. Got %d instead" % len(cloud.shape)
         return
@@ -741,6 +754,11 @@ def writePLY(cloud, filename):
         'property uchar diffuse_green',
         'property uchar diffuse_blue',
         ])
+    if faces != None:
+        header_lines.extend([
+        'element face %d' % len(faces),
+        'property list uchar int vertex_indices'
+        ])
 
     header_lines.extend([
       'end_header',
@@ -757,6 +775,9 @@ def writePLY(cloud, filename):
                 lines.append('%s %s %s %d %d %d' % tuple(cloud[i, j, :].tolist()))
             else:
                 lines.append('%s %s %s' % tuple(cloud[i, j, :].tolist()))
+
+    for face in faces:
+        lines.append(('%d' + ' %d'*len(face)) % tuple([len(face)] + face))
 
     f.write('\n'.join(lines) + '\n')
     f.close()
