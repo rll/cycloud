@@ -13,8 +13,8 @@ def fitPlane(points):
     mean = points.mean(axis=0)
     uu,dd,vv = np.linalg.svd(points-mean)
     plane = np.zeros(4)
-    plane[:3] = vv[0]
-    plane[3] = -np.dot(vv[0], mean)
+    plane[:3] = vv[-1]
+    plane[3] = -np.dot(vv[-1], mean)
     return plane
 
 def fitLine(points):
