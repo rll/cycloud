@@ -739,3 +739,85 @@ def extractClusters(cloud, clustering, numClusters):
     for clusterIndex in range(numClusters):
         clusterClouds.append(cloud[:, np.where(clustering==clusterIndex)[0], :])
     return clusterClouds
+
+def readPLY(filename):
+    with open(filename, 'r') as file:
+        line = file.readline()
+        line = file.readline()
+        # TODO add ascii support
+        if line.split()[1] != 'binary_little_endian':
+            print 'Format not binary little endian format, found %s' % line.split()[1]
+            return
+
+        rgb = False
+        while line != 'end_header\n':
+            line = file.readline()
+            if 'element vertex' in line:
+                num_vertex = int(line.split()[2])
+            if 'red' in line or 'green' in line or 'blue' in line:
+                rgb = True
+
+        if rgb:
+            cloud = np.empty((1, num_vertex, 6), dtype=np.float)
+        else:
+            cloud = np.empty((1, num_vertex, 3), dtype=np.float)
+
+        for i in range(num_vertex):
+            x_bin = file.read(4)
+            y_bin = file.read(4)
+            z_bin = file.read(4)
+            cloud[0, i, 0] = unpack('<f', x_bin)[0]
+            cloud[0, i, 1] = unpack('<f', y_bin)[0]
+            cloud[0, i, 2] = unpack('<f', z_bin)[0]
+
+            if rgb:
+                r = ord(file.read(1))
+                g = ord(file.read(1))
+                b = ord(file.read(1))
+                cloud[0, i, 3] = r
+                cloud[0, i, 4] = g
+                cloud[0, i, 5] = b
+
+        return cloud
+
+def writePLY(cloud, filename):
+    if len(cloud.shape) != 3:
+        print "Expected pointCloud to have 3 dimensions. Got %d instead" % len(cloud.shape)
+        return
+
+    color = True if cloud.shape[2] == 6 else False
+    num_points = cloud.shape[0]*cloud.shape[1]
+
+    header_lines = [
+        'ply',
+        'format ascii 1.0',
+        'element vertex %d' % num_points,
+        'property float x',
+        'property float y',
+        'property float z',
+        ]
+    if color:
+        header_lines.extend([
+        'property uchar diffuse_red',
+        'property uchar diffuse_green',
+        'property uchar diffuse_blue',
+        ])
+
+    header_lines.extend([
+      'end_header',
+      ])
+
+    f = open(filename, 'w+')
+    f.write('\n'.join(header_lines))
+    f.write('\n')
+
+    lines = []
+    for i in range(cloud.shape[0]):
+        for j in range(cloud.shape[1]):
+            if color:
+                lines.append('%s %s %s %d %d %d' % tuple(cloud[i, j, :].tolist()))
+            else:
+                lines.append('%s %s %s' % tuple(cloud[i, j, :].tolist()))
+
+    f.write('\n'.join(lines) + '\n')
+    f.close()
