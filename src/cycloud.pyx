@@ -722,7 +722,7 @@ cpdef agglomerativeClustering(np.ndarray[np.float_t, ndim=3] originalCloud,
             continue
         while len(queue) > 0:
             j = queue.pop()
-            neighbors = flann.nn_radius(cloud[j], eps)[0]
+            neighbors = flann.nn_radius(cloud[j], eps, cores=1)[0]
             for neighbor in neighbors:
                 if clustering[neighbor] == -1:
                     clustering[neighbor] = currentCluster
