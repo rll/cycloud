@@ -8,6 +8,7 @@ cimport numpy as np
 import numpy as np
 import scipy.misc
 from struct import pack, unpack, calcsize
+from collections import defaultdict
 
 def fitPlane(points):
     mean = points.mean(axis=0)
@@ -679,6 +680,38 @@ def readPCD(filename):
 
         return pointCloud
 
+class Mesh(object):
+    
+    def __init__(self, cloud, vertices, faces):
+        self.cloud = cloud
+        self.vertices = vertices
+        self.faces = faces
+
+        vertex_face_map = defaultdict(list)
+        for face in faces:
+            for vertex_idx in face:
+                vertex_face_map[vertex_idx].append(face)
+
+        face_normals = {}
+        for i, face in enumerate(faces):
+            one = np.array(self.vertices[face[0]])
+            two = np.array(self.vertices[face[1]])
+            three = np.array(self.vertices[face[2]])
+            n = np.cross(three-one, two-one)
+            n /= np.linalg.norm(n)
+            face_normals[face] = n
+        
+        vertex_normals = []
+        for i, vertex in enumerate(vertices):
+            faces = vertex_face_map[i]
+            n = np.zeros((1, 3)).flatten()
+            for face in faces:
+                n += face_normals[face]
+            n /= np.linalg.norm(n)
+            vertex_normals.append(n)
+        self.vertex_normals = vertex_normals
+            
+
 def readPLY(filename):
     with open(filename, 'r') as file:
         line = file.readline()
@@ -705,6 +738,7 @@ def readPLY(filename):
         else:
             cloud = np.empty((1, num_vertex, 3), dtype=np.float)
         face_list = []
+        vertex_list = []
 
         for i in range(num_vertex):
             x_bin = file.read(4)
@@ -713,6 +747,7 @@ def readPLY(filename):
             cloud[0, i, 0] = unpack('<f', x_bin)[0]
             cloud[0, i, 1] = unpack('<f', y_bin)[0]
             cloud[0, i, 2] = unpack('<f', z_bin)[0]
+            vertex_list.append((cloud[0, i, 0], cloud[0, i, 1], cloud[0, i, 2]))
 
             if rgb:
                 r = ord(file.read(1))
@@ -728,11 +763,17 @@ def readPLY(filename):
                 num_vertex = ord(file.read(1))
                 for j in range(num_vertex):
                     face.append(unpack('<i', file.read(4))[0])
-                face_list.append(face)
+                face_list.append(tuple(face))
+        
+        mesh = Mesh(cloud, vertex_list, face_list)
+        return mesh
 
-        return cloud, face_list
+def writePLY(filename, cloud, faces=[]):
+    #TODO this needs to be better organized
+    if isinstance(cloud, Mesh):
+        faces = cloud.faces
+        cloud = cloud.cloud
 
-def writePLY(filename, cloud, faces=None):
     if len(cloud.shape) != 3:
         print "Expected pointCloud to have 3 dimensions. Got %d instead" % len(cloud.shape)
         return
@@ -777,7 +818,7 @@ def writePLY(filename, cloud, faces=None):
                 lines.append('%s %s %s' % tuple(cloud[i, j, :].tolist()))
 
     for face in faces:
-        lines.append(('%d' + ' %d'*len(face)) % tuple([len(face)] + face))
+        lines.append(('%d' + ' %d'*len(face)) % tuple([len(face)] + list(face)))
 
     f.write('\n'.join(lines) + '\n')
     f.close()
