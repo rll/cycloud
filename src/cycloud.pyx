@@ -1,7 +1,6 @@
 #cython: boundscheck=False, wraparound=False
 
 import cython
-from cython.parallel import parallel, prange
 
 cimport numpy as np
 
@@ -14,8 +13,8 @@ def fitPlane(points):
     mean = points.mean(axis=0)
     uu,dd,vv = np.linalg.svd(points-mean)
     plane = np.zeros(4)
-    plane[:3] = vv[-1]
-    plane[3] = -np.dot(vv[-1], mean)
+    plane[:3] = vv[2]
+    plane[3] = -np.dot(vv[2], mean)
     return plane
 
 def fitLine(points):
@@ -477,7 +476,7 @@ cpdef downsampleImage(np.ndarray[np.uint8_t, ndim=3] rgbImage,
     shift = 0
     if height == 1024:
         shift = 30
-   
+
     cdef np.ndarray[np.float_t, ndim=2] rgbKNew
     rgbKNew = rgbK.copy()
     rgbKNew[1, 2] = rgbK[1, 2] - shift
@@ -488,6 +487,13 @@ cpdef downsampleImage(np.ndarray[np.uint8_t, ndim=3] rgbImage,
     downsampImage = scipy.misc.imresize(rgbImage[shift:960+shift, :, :], (480, 640)) 
 
     return (downsampImage, rgbKNew)
+
+def transformPoint(point, H):
+    H_point = np.empty((1, 4))
+    H_point[0, :3] = point
+    H_point[0, 3] = 1
+    transformed_H_point = np.dot(H,H_point.T).T
+    return transformed_H_point[0,:3]
 
 def transformPoints(points, H):
     H_points = np.empty((points.shape[0], 4))
@@ -511,7 +517,7 @@ def transformCloud(cloud, H, inplace=False):
         cloud[0,:,:3] = transformed_H_cloud[:,:3]
     return cloud
 
-def toUnorganized(cloud, remove_nan=False):
+def unorganizeCloud(cloud, remove_nan=False):
     cloud = cloud.reshape((cloud.shape[0] * cloud.shape[1], cloud.shape[2]))
     cloud = (cloud if not remove_nan else 
              cloud[np.logical_not(np.any(np.isnan(cloud), axis=1))])
@@ -680,8 +686,62 @@ def readPCD(filename):
 
         return pointCloud
 
+cpdef agglomerativeClustering(np.ndarray[np.float_t, ndim=3] originalCloud,
+                                double eps):
+
+    try:
+        import pyflann
+    except:
+        raise Exception("Can't use agglomerativeClustering without pyflann.")
+
+    if originalCloud.shape[0] != 1:
+        originalCloud = unorganizeCloud(originalCloud)
+
+    # Strip off colors
+    strippedCloud = originalCloud[:, :, :3]
+
+    # Strip off first dimension
+    cdef np.ndarray[np.float_t, ndim=2] cloud = strippedCloud.reshape((-1, 3))
+
+    cdef int numPoints = cloud.shape[0]
+
+    flann = pyflann.FLANN()
+    flann.build_index(cloud)
+
+    cdef int currentCluster = 0
+    cdef np.ndarray[np.int_t, ndim=1] clustering
+    clustering = -1*np.ones((numPoints,), dtype=np.int)
+
+    cdef list queue = []
+    cdef int i, j, neighbor
+    cdef np.ndarray[np.int32_t, ndim=1] neighbors
+
+    for i in range(numPoints):
+        if clustering[i] == -1:
+            queue.append(i)
+        else:
+            continue
+        while len(queue) > 0:
+            j = queue.pop()
+            neighbors = flann.nn_radius(cloud[j], eps, cores=1)[0]
+            for neighbor in neighbors:
+                if clustering[neighbor] == -1:
+                    clustering[neighbor] = currentCluster
+                    queue.append(neighbor)
+        queue = []
+        currentCluster += 1
+
+    cdef int numClusters = currentCluster
+
+    return extractClusters(originalCloud, clustering, numClusters)
+
+def extractClusters(cloud, clustering, numClusters):
+    clusterClouds = []
+    for clusterIndex in range(numClusters):
+        clusterClouds.append(cloud[:, np.where(clustering==clusterIndex)[0], :])
+    return clusterClouds
+
 class Mesh(object):
-    
     def __init__(self, cloud, vertices, faces):
         self.cloud = cloud
         self.vertices = vertices
@@ -710,7 +770,6 @@ class Mesh(object):
             n /= np.linalg.norm(n)
             vertex_normals.append(n)
         self.vertex_normals = vertex_normals
-            
 
 def readPLY(filename):
     with open(filename, 'r') as file:
@@ -777,7 +836,7 @@ def writePLY(filename, cloud, faces=[]):
     if len(cloud.shape) != 3:
         print "Expected pointCloud to have 3 dimensions. Got %d instead" % len(cloud.shape)
         return
-    
+
     color = True if cloud.shape[2] == 6 else False
     num_points = cloud.shape[0]*cloud.shape[1]
 
@@ -804,11 +863,11 @@ def writePLY(filename, cloud, faces=[]):
     header_lines.extend([
       'end_header',
       ])
-    
+
     f = open(filename, 'w+')
     f.write('\n'.join(header_lines))
     f.write('\n')
-    
+
     lines = []
     for i in range(cloud.shape[0]):
         for j in range(cloud.shape[1]):
@@ -822,5 +881,3 @@ def writePLY(filename, cloud, faces=[]):
 
     f.write('\n'.join(lines) + '\n')
     f.close()
-
-
