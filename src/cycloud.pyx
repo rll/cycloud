@@ -9,6 +9,10 @@ import scipy.misc
 from struct import pack, unpack, calcsize
 from collections import defaultdict
 
+import logging
+log = logging.getLogger(__name__)
+log.setLevel(logging.WARNING)
+
 def fitPlane(points):
     mean = points.mean(axis=0)
     uu,dd,vv = np.linalg.svd(points-mean)
@@ -624,12 +628,18 @@ def readPCD(filename):
         # "FIELDS x y z\n"
         fields = f.readline().strip().split()[1:]
 
-        if len(fields) == 3:
+        if len(fields) < 3:
+            raise Exception("Expected at least three fields; got %s instead." % str(fields))
+        elif len(fields) == 3:
+            assert fields == ['x', 'y', 'z']
             rgb = False
         elif len(fields) == 4:
+            assert fields == ['x', 'y', 'z', 'rgb']
             rgb = True
         else:
-            raise Exception("Unsupported fields: %s" % str(fields))
+            assert fields[:4] == ['x', 'y', 'z', 'rgb']
+            rgb = True
+            log.warn("Ignoring unsupported fields: %s" % str(fields[4:]))
 
         #"SIZE 4 4 4\n"
         sizes = [int(x) for x in f.readline().strip().split()[1:]]
@@ -662,12 +672,14 @@ def readPCD(filename):
         else:
             pointCloud = np.empty((height, width, 3))
 
+        bin_format = 'f' * max(4, len(fields))
+
         for row in range(height):
             for col in range(width):
                 if ascii:
                     data = [float(x) for x in f.readline().strip().split()]
                 else:
-                    data = unpack('ffff', f.read(pointSize))
+                    data = unpack(bin_format, f.read(pointSize))
 
                 pointCloud[row, col, 0] = data[0]
                 pointCloud[row, col, 1] = data[1]
