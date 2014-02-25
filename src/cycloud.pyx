@@ -29,65 +29,6 @@ def fitLine(points):
     line[3:] = vv[0, :]
     return line
 
-def undistortPoints(u, K, d):
-
-    fx = K[0,0]
-    fy = K[1,1]
-    cx = K[0,2]
-    cy = K[1,2]
-
-    k1 = d[0]
-    k2 = d[1]
-    p1 = d[2]
-    p2 = d[3]
-    k3 = d[4]
-
-    xp = (u[:,0] - cx)/fx
-    yp = (u[:,1] - cy)/fy
-
-    r_2 = xp*xp + yp*yp
-    r_4 = r_2*r_2
-    r_6 = r_4*r_2
-
-    xpp = (xp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
-           + 2.0*p1*xp*yp + p2*(r_2 + 2.0*xp*xp))
-
-    ypp = (yp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
-           + 2.0*p2*xp*yp + p1*(r_2 + 2.0*yp*yp))
-
-    xpp = xpp * fx + cx
-    ypp = ypp * fy + cy
-
-    return np.hstack([xpp[:,np.newaxis], ypp[:,np.newaxis]])
-
-def undistortPoints2(u, K, d):
-
-    fx = K[0,0]
-    fy = K[1,1]
-    cx = K[0,2]
-    cy = K[1,2]
-
-    k1 = d[0]
-    k2 = d[1]
-    p1 = d[2]
-    p2 = d[3]
-    k3 = d[4]
-
-    xp = (u[:,0] - cx)/fx
-    yp = (u[:,1] - cy)/fy
-
-    r_2 = xp*xp + yp*yp
-    r_4 = r_2*r_2
-    r_6 = r_4*r_2
-
-    xpp = (xp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
-           + 2.0*p1*xp*yp + p2*(r_2 + 2.0*xp*xp))
-
-    ypp = (yp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
-           + 2.0*p2*xp*yp + p1*(r_2 + 2.0*yp*yp))
-
-    return np.hstack([xpp[:,np.newaxis], ypp[:,np.newaxis]])
-
 def emanateRays(u, K):
     fx = K[0,0]
     fy = K[1,1]
