@@ -22,7 +22,7 @@ def fitLine(points):
     uu,dd,vv = np.linalg.svd(points-mean)
     line = np.zeros(6)
     line[:3] = mean
-    line[3:] = vv[0]
+    line[3:] = vv[0, :]
     return line
 
 def undistortPoints(u, K, d):
@@ -517,6 +517,89 @@ def transformCloud(cloud, H, inplace=False):
         cloud[0,:,:3] = transformed_H_cloud[:,:3]
     return cloud
 
+def distort_point(K, d, u):
+    fx = K[0, 0]
+    fy = K[1, 1]
+    cx = K[0, 2]
+    cy = K[1, 2]
+
+    k1 = d[0]
+    k2 = d[1]
+    p1 = d[2]
+    p2 = d[3]
+    k3 = d[4]
+    
+    x = (u[0] - cx)/fx
+    y = (u[1] - cy)/fy
+
+    xp = x
+    yp = y
+
+    for i in range(100):
+        r2 = xp**2 + yp**2
+        r4 = r2**2
+        r6 = r2*r4
+        k_r = 1.0 + k1*r2 + k2*r4 + k3*r6
+        delta_x = 2.0*p1*xp*yp + p2*(r2 + 2.0*xp*xp)
+        delta_y = 2.0*p2*xp*yp + p1*(r2 + 2.0*yp*yp)
+
+        xpp = (x - delta_x)/k_r
+        ypp = (y - delta_y)/k_r
+
+        if abs(xpp - xp) < 10e-15 and abs(ypp - yp) < 10e-15:
+            break
+
+        xp = xpp
+        yp = ypp
+    
+    xp = xp*fx + cx
+    yp = yp*fy + cy
+
+    u_d = np.array([xp, yp])
+    return u_d
+
+def distort_points(K, d, points):
+    distorted_pts = np.zeros(points.shape)
+    for i in range(points.shape[0]):
+        distorted_pts[i, :] = distort_point(K, d, points[i, :])
+    return distorted_pts
+
+def undistort_point(K, d, u):
+    fx = K[0, 0]
+    fy = K[1, 1]
+    cx = K[0, 2]
+    cy = K[1, 2]
+
+    k1 = d[0]
+    k2 = d[1]
+    p1 = d[2]
+    p2 = d[3]
+    k3 = d[4]
+   
+    xp = (u[0] - cx)/fx;
+    yp = (u[1] - cy)/fy;
+
+    r_2 = xp*xp + yp*yp;
+    r_4 = r_2 * r_2;
+    r_6 = r_4 * r_2;
+
+    xpp = xp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6) \
+          + 2.0*p1*xp*yp + p2*(r_2 + 2.0*xp*xp);
+
+    ypp = yp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6) \
+          + 2.0*p2*xp*yp + p1*(r_2 + 2.0*yp*yp);
+
+    xpp = xpp * fx + cx;
+    ypp = ypp * fy + cy;
+
+    return np.array([xpp, ypp])
+
+def undistort_points(K, d, points):
+    undistorted_pts = np.zeros(points.shape)
+    for i in range(points.shape[0]):
+        undistorted_pts[i, :] = undistort_point(K, d, points[i, :])
+    return undistorted_pts
+
 def unorganizeCloud(cloud, remove_nan=False):
     cloud = cloud.reshape((cloud.shape[0] * cloud.shape[1], cloud.shape[2]))
     cloud = (cloud if not remove_nan else 
@@ -742,9 +825,8 @@ def extractClusters(cloud, clustering, numClusters):
     return clusterClouds
 
 class Mesh(object):
-    def __init__(self, cloud, vertices, faces):
+    def __init__(self, cloud, faces):
         self.cloud = cloud
-        self.vertices = vertices
         self.faces = faces
 
         vertex_face_map = defaultdict(list)
@@ -754,15 +836,15 @@ class Mesh(object):
 
         face_normals = {}
         for i, face in enumerate(faces):
-            one = np.array(self.vertices[face[0]])
-            two = np.array(self.vertices[face[1]])
-            three = np.array(self.vertices[face[2]])
+            one = cloud[0, face[0], :3]
+            two = cloud[0, face[1], :3]
+            three = cloud[0, face[2], :3]
             n = np.cross(three-one, two-one)
             n /= np.linalg.norm(n)
             face_normals[face] = n
         
         vertex_normals = []
-        for i, vertex in enumerate(vertices):
+        for i in range(cloud.shape[1]):
             faces = vertex_face_map[i]
             n = np.zeros((1, 3)).flatten()
             for face in faces:
@@ -797,7 +879,6 @@ def readPLY(filename):
         else:
             cloud = np.empty((1, num_vertex, 3), dtype=np.float)
         face_list = []
-        vertex_list = []
 
         for i in range(num_vertex):
             x_bin = file.read(4)
@@ -806,7 +887,6 @@ def readPLY(filename):
             cloud[0, i, 0] = unpack('<f', x_bin)[0]
             cloud[0, i, 1] = unpack('<f', y_bin)[0]
             cloud[0, i, 2] = unpack('<f', z_bin)[0]
-            vertex_list.append((cloud[0, i, 0], cloud[0, i, 1], cloud[0, i, 2]))
 
             if rgb:
                 r = ord(file.read(1))
@@ -824,7 +904,7 @@ def readPLY(filename):
                     face.append(unpack('<i', file.read(4))[0])
                 face_list.append(tuple(face))
         
-        mesh = Mesh(cloud, vertex_list, face_list)
+        mesh = Mesh(cloud, face_list)
         return mesh
 
 def writePLY(filename, cloud, faces=[]):
