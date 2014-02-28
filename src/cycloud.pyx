@@ -29,6 +29,65 @@ def fitLine(points):
     line[3:] = vv[0, :]
     return line
 
+def undistortPoints(u, K, d):
+
+    fx = K[0,0]
+    fy = K[1,1]
+    cx = K[0,2]
+    cy = K[1,2]
+
+    k1 = d[0]
+    k2 = d[1]
+    p1 = d[2]
+    p2 = d[3]
+    k3 = d[4]
+
+    xp = (u[:,0] - cx)/fx
+    yp = (u[:,1] - cy)/fy
+
+    r_2 = xp*xp + yp*yp
+    r_4 = r_2*r_2
+    r_6 = r_4*r_2
+
+    xpp = (xp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
+           + 2.0*p1*xp*yp + p2*(r_2 + 2.0*xp*xp))
+
+    ypp = (yp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
+           + 2.0*p2*xp*yp + p1*(r_2 + 2.0*yp*yp))
+
+    xpp = xpp * fx + cx
+    ypp = ypp * fy + cy
+
+    return np.hstack([xpp[:,np.newaxis], ypp[:,np.newaxis]])
+
+def undistortPoints2(u, K, d):
+
+    fx = K[0,0]
+    fy = K[1,1]
+    cx = K[0,2]
+    cy = K[1,2]
+
+    k1 = d[0]
+    k2 = d[1]
+    p1 = d[2]
+    p2 = d[3]
+    k3 = d[4]
+
+    xp = (u[:,0] - cx)/fx
+    yp = (u[:,1] - cy)/fy
+
+    r_2 = xp*xp + yp*yp
+    r_4 = r_2*r_2
+    r_6 = r_4*r_2
+
+    xpp = (xp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
+           + 2.0*p1*xp*yp + p2*(r_2 + 2.0*xp*xp))
+
+    ypp = (yp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6)
+           + 2.0*p2*xp*yp + p1*(r_2 + 2.0*yp*yp))
+
+    return np.hstack([xpp[:,np.newaxis], ypp[:,np.newaxis]])
+
 def emanateRays(u, K):
     fx = K[0,0]
     fy = K[1,1]
@@ -270,6 +329,59 @@ cpdef get3dPoints(np.float_t[:,:] K,
         points[i,2] = depths[i]
 
     return points
+
+cpdef undistortDepthMap(np.float_t[:,:] depthMap,
+                        np.float_t[:,:] depthK,
+                        np.float_t[:] depthD):
+
+    cdef np.float_t cx = depthK[0,2]
+    cdef np.float_t cy = depthK[1,2]
+    cdef np.float_t fx = depthK[0,0]
+    cdef np.float_t fy = depthK[1,1]
+    cdef np.float_t invFx = 1.0/depthK[0,0]
+    cdef np.float_t invFy = 1.0/depthK[1,1]
+    cdef np.float_t k1 = depthD[0]
+    cdef np.float_t k2 = depthD[1]
+    cdef np.float_t p1 = depthD[2]
+    cdef np.float_t p2 = depthD[3]
+    cdef np.float_t k3 = depthD[4]
+
+    cdef int height = depthMap.shape[0]
+    cdef int width = depthMap.shape[1]
+    cdef int u, v
+
+    cdef np.float_t depth
+
+    cdef np.ndarray[np.float_t,ndim=2] undistortedDepthMap
+    undistortedDepthMap = np.zeros((height, width), dtype=np.float)
+
+    for v in range(height):
+        for u in range(width):
+
+            depth = depthMap[v,u]
+            
+            xp = (u - cx)*invFx;
+            yp = (v - cy)*invFy;
+
+            r_2 = xp*xp + yp*yp;
+            r_4 = r_2 * r_2;
+            r_6 = r_4 * r_2;
+
+            xpp = xp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6) \
+                  + 2.0*p1*xp*yp + p2*(r_2 + 2.0*xp*xp);
+
+            ypp = yp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6) \
+                  + 2.0*p2*xp*yp + p1*(r_2 + 2.0*yp*yp);
+            
+            xpp = int(xpp * fx + cx);
+            ypp = int(ypp * fy + cy);
+
+            if xpp < 0 or xpp >= width or ypp < 0 or ypp>= height:
+                continue
+
+            undistortedDepthMap[ypp, xpp] = depth
+
+    return undistortedDepthMap
 
 cpdef unregisteredDepthMapToPointCloud(np.float_t[:,:] depthMap,
                                        np.float_t[:,:] depthK=None,
