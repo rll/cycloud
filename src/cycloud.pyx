@@ -4,6 +4,8 @@ import cython
 
 cimport numpy as np
 
+import random
+import time
 import numpy as np
 import scipy.misc
 from struct import pack, unpack, calcsize
@@ -19,6 +21,35 @@ def fitPlane(points):
     plane = np.zeros(4)
     plane[:3] = vv[2]
     plane[3] = -np.dot(vv[2], mean)
+    return plane
+
+def fitPlaneRansac(points):
+    random.seed(time.time())
+    init = random.sample(range(points.shape[0]), 20)
+    consistent = points[init, :]
+    for i in range(1000):
+        mean = consistent.mean(axis=0)
+        uu,dd,vv = np.linalg.svd(consistent-mean)
+        plane = np.zeros(4)
+        plane[:3] = vv[2]
+        plane[3] = -np.dot(vv[2], mean)
+
+        consistent = []
+        for pt_idx in range(points.shape[0]):
+            pt = points[pt_idx, :] - mean
+            d = abs(np.dot(pt, plane[:3]))
+            if d < 0.2:
+                consistent.append(pt)
+        
+        if len(consistent) > points.shape[0]*0.8:
+            break
+
+        if len(consistent) < 20:
+            init = random.sample(range(points.shape[0]), 20)
+            consistent = points[init, :]
+        else:
+            consistent = np.array(consistent)
+    
     return plane
 
 def fitLine(points):
