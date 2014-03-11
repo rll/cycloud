@@ -49,7 +49,7 @@ def fitPlaneRansac(points):
             consistent = points[init, :]
         else:
             consistent = np.array(consistent)
-    
+
     return plane
 
 def fitLine(points):
@@ -71,7 +71,7 @@ def distortPoint(K, d, u):
     p1 = d[2]
     p2 = d[3]
     k3 = d[4]
-    
+
     x = (u[0] - cx)/fx
     y = (u[1] - cy)/fy
 
@@ -94,7 +94,7 @@ def distortPoint(K, d, u):
 
         xp = xpp
         yp = ypp
-    
+
     xp = xp*fx + cx
     yp = yp*fy + cy
 
@@ -286,7 +286,8 @@ cpdef registerDepthMap(np.float_t[:,:] unregisteredDepthMap,
                        np.uint8_t[:,:,:] rgbImage,
                        np.float_t[:,:] depthK=None,
                        np.float_t[:,:] rgbK=None,
-                       np.float_t[:,:] H_RGBFromDepth=None):
+                       np.float_t[:,:] H_RGBFromDepth=None,
+                       np.float_t[:] rgbD=None):
 
     # Use the default value that Primesense uses for most sensors if no
     # calibration matrix is provided.
@@ -317,7 +318,7 @@ cpdef registerDepthMap(np.float_t[:,:] unregisteredDepthMap,
     cdef int registeredHeight = rgbImage.shape[0]
     cdef int registeredWidth = rgbImage.shape[1]
 
-    cdef np.ndarray[np.float_t, ndim=2] registeredDepthMap 
+    cdef np.ndarray[np.float_t, ndim=2] registeredDepthMap
     registeredDepthMap = np.zeros((registeredHeight, registeredWidth))
     cdef np.float_t[:,:] registeredDepthMap_view = registeredDepthMap
 
@@ -348,6 +349,7 @@ cpdef registerDepthMap(np.float_t[:,:] unregisteredDepthMap,
 
     cdef np.float_t registeredDepth
 
+    undistorted = np.empty(2)
     for v in range(unregisteredHeight):
       for u in range(unregisteredWidth):
 
@@ -373,8 +375,15 @@ cpdef registerDepthMap(np.float_t[:,:] unregisteredDepthMap,
                               H_RGBFromDepth[2,3])
 
             invRGB_Z  = 1.0 / xyzRGB_view[2]
-            uRGB = int((rgbFx * xyzRGB_view[0]) * invRGB_Z + rgbCx + 0.5)
-            vRGB = int((rgbFy * xyzRGB_view[1]) * invRGB_Z + rgbCy + 0.5)
+            undistorted[0] = (rgbFx * xyzRGB_view[0]) * invRGB_Z + rgbCx
+            undistorted[1] = (rgbFy * xyzRGB_view[1]) * invRGB_Z + rgbCy
+            if rgbD is None:
+                uRGB = int(undistorted[0] + 0.5)
+                vRGB = int(undistorted[1] + 0.5)
+            else:
+                distorted = distortPoint(rgbK, rgbD, undistorted)
+                uRGB = int(distorted[0] + 0.5)
+                vRGB = int(distorted[1] + 0.5)
 
             if (uRGB < 0 or uRGB >= registeredWidth) or (vRGB < 0 or vRGB >= registeredHeight):
                 continue
