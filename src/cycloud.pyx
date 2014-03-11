@@ -60,23 +60,28 @@ def fitLine(points):
     line[3:] = vv[0, :]
     return line
 
-def distortPoint(K, d, u):
-    fx = K[0, 0]
-    fy = K[1, 1]
-    cx = K[0, 2]
-    cy = K[1, 2]
+@cython.cdivision(True)
+cpdef distortPoint(np.float_t[:,:] K, np.float_t[:] d, np.float_t[:] u):
+    cdef double fx = K[0, 0]
+    cdef double fy = K[1, 1]
+    cdef double cx = K[0, 2]
+    cdef double cy = K[1, 2]
 
-    k1 = d[0]
-    k2 = d[1]
-    p1 = d[2]
-    p2 = d[3]
-    k3 = d[4]
+    cdef double k1 = d[0]
+    cdef double k2 = d[1]
+    cdef double p1 = d[2]
+    cdef double p2 = d[3]
+    cdef double k3 = d[4]
 
-    x = (u[0] - cx)/fx
-    y = (u[1] - cy)/fy
+    cdef double x = (u[0] - cx)/fx
+    cdef double y = (u[1] - cy)/fy
 
-    xp = x
-    yp = y
+    cdef double xp = x
+    cdef double yp = y
+
+    cdef int i
+
+    cdef double r2, r4, r6, k_r, delta_x, delta_y, xpp, ypp
 
     for i in range(100):
         r2 = xp**2 + yp**2
@@ -98,7 +103,9 @@ def distortPoint(K, d, u):
     xp = xp*fx + cx
     yp = yp*fy + cy
 
-    u_d = np.array([xp, yp])
+    cdef np.ndarray[np.float_t, ndim=1] u_d = np.empty(2)
+    u_d[0] = xp
+    u_d[1] = yp
     return u_d
 
 def distortPoints(K, d, points):
