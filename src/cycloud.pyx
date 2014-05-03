@@ -3,6 +3,7 @@
 import cython
 
 cimport numpy as np
+from libc.math cimport exp, fabs, sqrt
 
 import random
 import time
@@ -40,7 +41,7 @@ def fitPlaneRansac(points):
             d = abs(np.dot(pt, plane[:3]))
             if d < 0.2:
                 consistent.append(pt)
-        
+
         if len(consistent) > points.shape[0]*0.8:
             break
 
@@ -511,7 +512,7 @@ cpdef undistortDepthMap(np.float_t[:,:] depthMap,
         for u in range(width):
 
             depth = depthMap[v,u]
-            
+
             xp = (u - cx)*invFx;
             yp = (v - cy)*invFy;
 
@@ -524,7 +525,7 @@ cpdef undistortDepthMap(np.float_t[:,:] depthMap,
 
             ypp = yp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6) \
                   + 2.0*p2*xp*yp + p1*(r_2 + 2.0*yp*yp);
-            
+
             xpp = int(xpp * fx + cx);
             ypp = int(ypp * fy + cy);
 
@@ -598,7 +599,7 @@ cpdef unregisteredDepthMapToPointCloud(np.float_t[:,:] depthMap,
             if not organized:
               goodPointsCount += 1
 
-    if not organized: 
+    if not organized:
       cloud = cloud[:,:goodPointsCount,:]
     return cloud
 
@@ -977,7 +978,7 @@ class Mesh(object):
             n = np.cross(three-one, two-one)
             n /= np.linalg.norm(n)
             face_normals[face] = n
-        
+
         vertex_normals = []
         for i in range(cloud.shape[1]):
             faces = vertex_face_map[i]
@@ -987,6 +988,87 @@ class Mesh(object):
             n /= np.linalg.norm(n)
             vertex_normals.append(n)
         self.vertex_normals = vertex_normals
+
+cdef inline double gaussian_weight(double sigma, double value):
+    return exp(-0.5 * (value / sigma)**2)
+
+@cython.cdivision(True)
+cpdef bilateral_filter(np.ndarray[np.float_t, ndim=2] depth_map,
+                       int window_size,
+                       double sigma_depth,
+                       double sigma_uv):
+
+    if window_size % 2 != 1:
+        raise ValueError("bilateral_filter: window_size must be odd.")
+
+    cdef:
+        np.ndarray[np.float_t, ndim=2] uv_lut, out
+
+        int v, u, vv, vu, wv, wu
+        int half_window = (window_size - 1) / 2
+
+        int rows = depth_map.shape[0]
+        int cols = depth_map.shape[0]
+
+        double total_weight, total_value
+
+        double dist
+        double depth_weight, uv_weight, weight
+        double depth
+
+    uv_lut = np.empty((window_size, window_size))
+    out = np.empty((depth_map.shape[0], depth_map.shape[1]))
+
+    for v in range(window_size):
+        for u in range(window_size):
+            dist = sqrt((v-half_window)**2 + (u - half_window)**2)
+            uv_lut[v,u] = gaussian_weight(sigma_uv, dist)
+
+    for v in range(rows):
+        for u in range(cols):
+            total_weight = 0
+            total_value = 0
+
+            depth = depth_map[v,u]
+
+            for wv in range(-half_window, half_window + 1):
+
+                vv = v + wv
+                if vv < 0 or vv >= rows:
+                    continue
+
+                for wu in range(-half_window, half_window + 1):
+                    uu = u + wu
+
+                    if uu < 0 or uu >= cols:
+                        continue
+
+                    dist = fabs(depth - depth_map[vv,uu])
+
+                    depth_weight = gaussian_weight(sigma_depth, dist)
+                    uv_weight = uv_lut[wv,wu]
+                    weight = depth_weight * uv_weight
+
+                    total_value += weight * depth
+                    total_weight += weight
+
+            out[v,u] = total_value / total_weight
+
+    return out
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 def readPLY(filename):
     with open(filename, 'r') as file:
@@ -1038,7 +1120,7 @@ def readPLY(filename):
                 for j in range(num_vertex):
                     face.append(unpack('<i', file.read(4))[0])
                 face_list.append(tuple(face))
-        
+
         mesh = Mesh(cloud, face_list)
         return mesh
 
