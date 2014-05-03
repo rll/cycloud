@@ -424,6 +424,64 @@ cpdef get3dPoints(np.float_t[:,:] K,
 
     return points
 
+cpdef undistortImage(np.uint8_t[:,:, :] image,
+                        np.float_t[:,:] K,
+                        np.float_t[:] D):
+
+    cdef np.float_t cx = K[0,2]
+    cdef np.float_t cy = K[1,2]
+    cdef np.float_t fx = K[0,0]
+    cdef np.float_t fy = K[1,1]
+    cdef np.float_t invFx = 1.0/K[0,0]
+    cdef np.float_t invFy = 1.0/K[1,1]
+    cdef np.float_t k1 = D[0]
+    cdef np.float_t k2 = D[1]
+    cdef np.float_t p1 = D[2]
+    cdef np.float_t p2 = D[3]
+    cdef np.float_t k3 = D[4]
+
+    cdef int height = image.shape[0]
+    cdef int width = image.shape[1]
+    cdef int channels = image.shape[2]
+    cdef int u, v
+
+    cdef np.ndarray[np.uint8_t, ndim=1] pixel = np.zeros(3, dtype=np.uint8)
+
+    cdef np.ndarray[np.uint8_t,ndim=3] undistortedImage
+    undistortedImage = np.zeros((height, width, channels), dtype=np.uint8)
+
+    for v in range(height):
+        for u in range(width):
+
+            pixel[0] = image[v,u,0]
+            pixel[1] = image[v,u,1]
+            pixel[2] = image[v,u,2]
+
+            xp = (u - cx)*invFx;
+            yp = (v - cy)*invFy;
+
+            r_2 = xp*xp + yp*yp;
+            r_4 = r_2 * r_2;
+            r_6 = r_4 * r_2;
+
+            xpp = xp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6) \
+                  + 2.0*p1*xp*yp + p2*(r_2 + 2.0*xp*xp);
+
+            ypp = yp*(1.0 + k1*r_2 + k2*r_4 + k3*r_6) \
+                  + 2.0*p2*xp*yp + p1*(r_2 + 2.0*yp*yp);
+
+            xpp = int(xpp * fx + cx);
+            ypp = int(ypp * fy + cy);
+
+            if xpp < 0 or xpp >= width or ypp < 0 or ypp>= height:
+                continue
+
+            undistortedImage[ypp, xpp, 0] = pixel[0]
+            undistortedImage[ypp, xpp, 1] = pixel[1]
+            undistortedImage[ypp, xpp, 2] = pixel[2]
+
+    return undistortedImage
+
 cpdef undistortDepthMap(np.float_t[:,:] depthMap,
                         np.float_t[:,:] depthK,
                         np.float_t[:] depthD):
