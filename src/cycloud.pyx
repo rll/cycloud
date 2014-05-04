@@ -996,7 +996,8 @@ cdef inline double gaussian_weight(double sigma, double value):
 cpdef bilateral_filter(np.ndarray[np.float_t, ndim=2] depth_map,
                        int window_size,
                        double sigma_depth,
-                       double sigma_uv):
+                       double sigma_uv,
+                       double min_depth=10.0):
 
     if window_size % 2 != 1:
         raise ValueError("bilateral_filter: window_size must be odd.")
@@ -1004,17 +1005,17 @@ cpdef bilateral_filter(np.ndarray[np.float_t, ndim=2] depth_map,
     cdef:
         np.ndarray[np.float_t, ndim=2] uv_lut, out
 
-        int v, u, vv, vu, wv, wu
+        int v, u, vv, vu, wv, wu, ku, kv
         int half_window = (window_size - 1) / 2
 
         int rows = depth_map.shape[0]
-        int cols = depth_map.shape[0]
+        int cols = depth_map.shape[1]
 
         double total_weight, total_value
 
         double dist
         double depth_weight, uv_weight, weight
-        double depth
+        double center_depth, this_depth, filtered_depth
 
     uv_lut = np.empty((window_size, window_size))
     out = np.empty((depth_map.shape[0], depth_map.shape[1]))
@@ -1029,7 +1030,7 @@ cpdef bilateral_filter(np.ndarray[np.float_t, ndim=2] depth_map,
             total_weight = 0
             total_value = 0
 
-            depth = depth_map[v,u]
+            center_depth = depth_map[v,u]
 
             for wv in range(-half_window, half_window + 1):
 
@@ -1037,22 +1038,32 @@ cpdef bilateral_filter(np.ndarray[np.float_t, ndim=2] depth_map,
                 if vv < 0 or vv >= rows:
                     continue
 
+                kv = wv + half_window
+
                 for wu in range(-half_window, half_window + 1):
                     uu = u + wu
 
                     if uu < 0 or uu >= cols:
                         continue
 
-                    dist = fabs(depth - depth_map[vv,uu])
+                    ku = wu + half_window
+
+                    this_depth = depth_map[vv,uu]
+
+                    dist = fabs(center_depth - this_depth)
 
                     depth_weight = gaussian_weight(sigma_depth, dist)
-                    uv_weight = uv_lut[wv,wu]
+                    uv_weight = uv_lut[kv,ku]
                     weight = depth_weight * uv_weight
 
-                    total_value += weight * depth
+                    total_value += weight * this_depth
                     total_weight += weight
 
-            out[v,u] = total_value / total_weight
+            filtered_depth = total_value / total_weight
+            if fabs(total_weight) > 0 and filtered_depth > min_depth:
+                out[v,u] = filtered_depth
+            else:
+                out[v,u] = 0
 
     return out
 
