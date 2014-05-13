@@ -997,7 +997,7 @@ cpdef bilateral_filter(np.ndarray[np.float_t, ndim=2] depth_map,
                        int window_size,
                        double sigma_depth,
                        double sigma_uv,
-                       double min_depth=10.0):
+                       double min_depth=.25):
 
     if window_size % 2 != 1:
         raise ValueError("bilateral_filter: window_size must be odd.")
