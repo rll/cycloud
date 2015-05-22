@@ -587,9 +587,9 @@ cpdef unregisteredDepthMapToPointCloud(np.float_t[:,:] depthMap,
             if depth <= 0:
                 if organized:
                     if depth <= 0:
-                       cloud[row,col,0] = 0
-                       cloud[row,col,1] = 0
-                       cloud[row,col,2] = 0
+                       cloud[row,col,0] = float('nan')
+                       cloud[row,col,1] = float('nan')
+                       cloud[row,col,2] = float('nan')
                 continue
 
             cloud[row,col,0] = (u - depthCx) * depth * depthInvFx
@@ -651,9 +651,9 @@ cpdef registeredDepthMapToPointCloud(np.float_t[:,:] depthMap,
             if depth <= 0:
                 if organized:
                     if depth <= 0:
-                       cloud[row,col,0] = 0
-                       cloud[row,col,1] = 0
-                       cloud[row,col,2] = 0
+                       cloud[row,col,0] = float('nan')
+                       cloud[row,col,1] = float('nan')
+                       cloud[row,col,2] = float('nan')
                        cloud[row,col,3] = 0
                        cloud[row,col,4] = 0
                        cloud[row,col,5] = 0
